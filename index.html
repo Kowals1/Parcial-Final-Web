@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkyDash-Manager - Clima Georreferenciado</title>
+    
+    <!-- Meta tags de SEO -->
+    <meta name="description" content="SkyDash-Manager es una plataforma meteorológica georreferenciada avanzada. Visualiza el clima actual y pronósticos de 7 días de cualquier ubicación en un mapa interactivo.">
+    <meta name="keywords" content="clima, meteorología, mapa interactivo, geolocalización, open-meteo, leaflet, offline">
+    <meta name="author" content="SkyDash Corp">
+
+    <!-- Fuentes de Google -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    
+    <!-- Estilos personalizados -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-mode"> <!-- Por defecto iniciamos en dark mode para un look premium -->
+    
+    <!-- Banner de Estado de Conexión (Modo Offline) -->
+    <div id="offline-banner" class="offline-banner hidden">
+        <span class="banner-icon">⚡</span>
+        <span class="banner-text">Sin conexión a Internet. Usando datos guardados localmente.</span>
+    </div>
+
+    <!-- 1. MÓDULO DE AUTENTICACIÓN (LOGIN OVERLAY) -->
+    <div id="login-overlay" class="login-overlay">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="logo-icon">☁️</div>
+                <h1>SkyDash-Manager</h1>
+                <p>Ingresa tus credenciales para acceder al panel meteorológico</p>
+            </div>
+            
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="username">Usuario</label>
+                    <input type="text" id="username" placeholder="Ingresa tu usuario" required autocomplete="username">
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Contraseña</label>
+                    <input type="password" id="password" placeholder="Ingresa tu contraseña" required autocomplete="current-password">
+                </div>
+                
+                <div id="login-error" class="error-message hidden">
+                    Usuario o contraseña incorrectos. 
+                </div>
+                
+                <button type="submit" id="btn-login" class="btn-primary">
+                    <span class="btn-text">Iniciar Sesión</span>
+                    <div id="login-spinner" class="spinner hidden"></div>
+                </button>
+            </form>
+            
+        </div>
+    </div>
+
+    <!-- 2. APLICACIÓN PRINCIPAL (DASHBOARD) -->
+    <div id="app-container" class="app-container hidden">
+        
+        <!-- Encabezado Principal -->
+        <header class="main-header">
+            <div class="header-brand">
+                <span class="brand-icon">⚡</span>
+                <h2>SkyDash</h2>
+            </div>
+            
+            <div class="header-actions">
+                <!-- Selector de Tema -->
+                <button id="theme-toggle" class="btn-icon" aria-label="Cambiar tema">
+                    <span class="theme-icon-light">☀️</span>
+                    <span class="theme-icon-dark">🌙</span>
+                </button>
+                
+                <!-- Info de Usuario -->
+                <div class="user-profile">
+                    <span class="user-avatar">👤</span>
+                    <span id="user-display-name" class="user-name">Usuario</span>
+                </div>
+                
+                <!-- Botón Cerrar Sesión -->
+                <button id="btn-logout" class="btn-secondary btn-small">
+                    <span>Cerrar Sesión</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Cuerpo del Dashboard -->
+        <div class="dashboard-body">
+            
+            <!-- Sidebar: Búsqueda y Mis Ubicaciones -->
+            <aside class="dashboard-sidebar">
+                
+                <!-- Buscador de Ubicaciones -->
+                <section class="search-section card">
+                    <h3>Buscar Ubicación</h3>
+                    <form id="search-form" class="search-form">
+                        <div class="search-input-wrapper">
+                            <input type="text" id="search-input" placeholder="Ej. París, Caracas, Tokyo..." autocomplete="off">
+                            <button type="button" id="btn-clear-search" class="btn-clear hidden">&times;</button>
+                        </div>
+                        <button type="submit" id="btn-search" class="btn-search-submit">
+                            <span>🔍</span>
+                        </button>
+                    </form>
+                    <div id="search-results-list" class="search-results-list hidden"></div>
+                </section>
+                
+                <!-- Mis Ubicaciones (Colección Privada) -->
+                <section class="favorites-section card">
+                    <div class="favorites-header">
+                        <h3>Mis Ubicaciones</h3>
+                        <span id="favorites-count" class="badge">0</span>
+                    </div>
+                    <div id="favorites-list" class="favorites-list">
+                        <!-- Se poblará dinámicamente -->
+                        <div class="empty-favorites">
+                            <p>No tienes ubicaciones guardadas.</p>
+                            <span>Haz clic en el mapa y presiona "Guardar ubicación" para añadir una.</span>
+                        </div>
+                    </div>
+                </section>
+                
+            </aside>
+
+            <!-- Contenido Principal: Mapa y Detalles -->
+            <main class="dashboard-main">
+                
+                <!-- Mapa Interactivo -->
+                <section class="map-section card">
+                    <div id="map" class="map-container"></div>
+                </section>
+                
+                <!-- Detalle Meteorológico -->
+                <section id="weather-details-section" class="weather-details-section card hidden">
+                    
+                    <!-- Cabecera de Detalles y Añadir a favoritos -->
+                    <div class="weather-details-header">
+                        <div class="location-info">
+                            <h2 id="weather-location-name">Caracas, Venezuela</h2>
+                            <p id="weather-coords">Lat: 10.48, Lng: -66.90</p>
+                        </div>
+                        <button id="btn-toggle-favorite" class="btn-favorite" title="Guardar en favoritos">
+                            <span class="favorite-icon">⭐</span>
+                            <span class="favorite-text">Guardar</span>
+                        </button>
+                    </div>
+
+                    <!-- Clima Actual (Semántico) -->
+                    <div class="current-weather-container">
+                        <div class="current-weather-main">
+                            <div id="current-weather-icon" class="current-weather-large-icon">☀️</div>
+                            <div class="current-temp-wrapper">
+                                <span id="current-temperature">24</span><span class="temp-unit">°C</span>
+                                <p id="current-weather-desc" class="weather-condition-desc">Despejado</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Panel de analíticas (Humedad, Viento, etc.) -->
+                        <div class="weather-metrics-grid">
+                            <div class="metric-card">
+                                <span class="metric-icon">💧</span>
+                                <div class="metric-info">
+                                    <span class="metric-label">Humedad</span>
+                                    <span id="current-humidity" class="metric-value">65%</span>
+                                </div>
+                            </div>
+                            <div class="metric-card">
+                                <span class="metric-icon">💨</span>
+                                <div class="metric-info">
+                                    <span class="metric-label">Viento</span>
+                                    <span id="current-wind" class="metric-value">12 km/h</span>
+                                </div>
+                            </div>
+                            <div class="metric-card">
+                                <span class="metric-icon">🧭</span>
+                                <div class="metric-info">
+                                    <span class="metric-label">Dirección Viento</span>
+                                    <span id="current-wind-direction" class="metric-value">NE</span>
+                                </div>
+                            </div>
+                            <div class="metric-card">
+                                <span class="metric-icon">🌡️</span>
+                                <div class="metric-info">
+                                    <span class="metric-label">Sensación Térmica</span>
+                                    <span id="current-apparent-temp" class="metric-value">25°C</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pronóstico de 7 Días -->
+                    <div class="forecast-section">
+                        <h3>Pronóstico Extendido (7 Días)</h3>
+                        <div id="forecast-grid" class="forecast-grid">
+                            <!-- Se poblará dinámicamente con las tarjetas diarias -->
+                        </div>
+                    </div>
+
+                </section>
+                
+                <!-- Estado Inicial / Placeholder cuando no hay ubicación seleccionada -->
+                <div id="weather-placeholder" class="weather-placeholder card">
+                    <div class="placeholder-content">
+                        <div class="placeholder-icon">🗺️</div>
+                        <h3>Selecciona una Ubicación</h3>
+                        <p>Haz clic en cualquier parte del mapa o utiliza el buscador para consultar las condiciones climáticas detalladas.</p>
+                    </div>
+                </div>
+
+            </main>
+
+        </div>
+        
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- Lógica de la aplicación -->
+    <script src="app.js"></script>
+</body>
+</html>
